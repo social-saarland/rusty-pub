@@ -1,5 +1,5 @@
-use axum::async_trait;
 use axum::{
+    async_trait,
     extract::{Extension, FromRequest, RequestParts},
     http::{header, StatusCode},
     response::{IntoResponse, Response},
@@ -7,11 +7,14 @@ use axum::{
 use std::sync::Arc;
 use tera;
 use tera::{Context, Tera};
+use serde::Serialize;
 
 pub struct Render {
     tera: Arc<Tera>,
     name: String,
+    context: Context
 }
+
 
 #[derive(Clone)]
 pub struct Templates(Arc<Tera>);
@@ -43,13 +46,32 @@ impl Templates {
         Render {
             name: name.to_string(),
             tera: self.0.clone(),
+            context: Context::new(),
+        }
+    }
+}
+
+impl Render {
+    pub fn set<T: Serialize>(mut self: Render, name: &str, data: T) -> Render {
+        self.context.insert(name.clone(), &data);
+        self
+    }
+}
+
+impl IntoResponse for &mut Render {
+    fn into_response(self) -> Response {
+        match self.tera.render(&self.name, &self.context) {
+            Ok(html) => {
+                (StatusCode::OK, [(header::CONTENT_TYPE, "text/html")], html).into_response()
+            }
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e)).into_response(),
         }
     }
 }
 
 impl IntoResponse for Render {
     fn into_response(self) -> Response {
-        match self.tera.render(&self.name, &Context::new()) {
+        match self.tera.render(&self.name, &self.context) {
             Ok(html) => {
                 (StatusCode::OK, [(header::CONTENT_TYPE, "text/html")], html).into_response()
             }

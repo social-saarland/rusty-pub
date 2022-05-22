@@ -85,10 +85,6 @@ async fn exec_login(
         .finish()
 }
 
-#[derive(Deserialize, Serialize)]
-struct LoginFormData {
-    email: String,
-}
 
 #[post("/login")]
 async fn send_login_link(
@@ -167,68 +163,30 @@ async fn manual_hello() -> impl Responder {
     HttpResponse::Ok().body("Hey there!")
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    dotenv().ok();
-
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL is not set");
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await
-        .unwrap();
-    sqlx::migrate!().run(&pool).await.unwrap();
-
-    let pool_ref = web::Data::new(pool);
-
-    /*    let mut handlebars = Handlebars::new();
-    handlebars
-        .register_templates_directory(".html", "./templates")
-        .unwrap();
-    let handlebars_ref = web::Data::new(handlebars);*/
-
-    let tera = web::Data::new(templating::load_templates());
-
-    HttpServer::new(move || {
-        App::new()
-            .app_data(pool_ref.clone())
-            .app_data(tera.clone())
-            .wrap(IdentityService::new(
-                CookieIdentityPolicy::new(&[0; 32])
-                    .name("pubhub-auth-cookie")
-                    .secure(false),
-            ))
-            .service(test)
-            .service(hello)
-            .service(echo)
-            .service(
-                web::scope("/auth")
-                    .service(login_form)
-                    .service(send_login_link)
-                    .service(exec_login)
-                    .service(logout)
-                    .route("/protected", web::get().to(protected))
-                    .route("/protected", web::get().to(not_protected)),
-            )
-            .route("/hey", web::get().to(manual_hello))
-    })
-    .bind("0.0.0.0:8088")?
-    .run()
-    .await
-}
 */
 
 use axum::{
     routing::{get, post},
     Router,
+    response::IntoResponse,
+    extract::Form,
 };
 
-/*
-async fn show_login_form(id: Identity) -> impl Responder {
-    id.remember("User123".to_owned());
-    html::render("login.html")
+use serde::{Deserialize, Serialize};
+use crate::templating::Templates;
+
+use crate::db::Db;
+
+#[derive(Deserialize, Serialize)]
+struct LoginFormData {
+    email: String,
 }
 
+async fn show_login_form(tmpl: Templates) -> impl IntoResponse {
+    tmpl.render("login.html")
+}
+
+/*
 async fn exec_login(
     id: web::Path<Uuid>,
     _identity: Identity,
@@ -250,18 +208,15 @@ async fn exec_login(
     HttpResponse::Found()
         .append_header(("Location", "/me"))
         .finish()
-}
+}*/
 
 
-async fn send_login_link(
-    form: web::Form<LoginFormData>,
-    pool: web::Data<PgPool>,
-) -> impl Responder {
+async fn send_login_link(form: Form<LoginFormData>, db: Db, t: Templates) -> impl IntoResponse {
     println!("Email: {}", form.email);
 
-    let id = db::auth::prepare_login(pool.get_ref(), &form.email).await;
+    let id = db.prepare_login(&form.email).await;
 
-    let login_url = format!("http://localhost:8088/auth/login/{}", id);
+    let login_url = format!("http://localhost:3000/auth/login/{}", id);
 
     println!("{}", login_url);
     /*    let attempt = sqlx::query!("select prepare_login($1) as uuid", form.email)
@@ -270,9 +225,9 @@ async fn send_login_link(
 
     smtp.get_ref().send(&form.email, &login_url).await;*/
 
-    html::render("link_was_sent.html").data("login_url", login_url)
+    t.render("link_was_sent.html").set("login_url", login_url)
 }
-
+/*
 async fn logout(id: Identity) -> impl Responder {
     id.forget();
     HttpResponse::Ok().body("logged out")
@@ -280,8 +235,8 @@ async fn logout(id: Identity) -> impl Responder {
 */
 pub fn routes() -> Router {
     Router::new()
-    /*       .route("/login", get(show_login_form))
+    .route("/login", get(show_login_form))
     .route("/login", post(send_login_link))
-    .route("/login/:login_id", get(exec_login))
+    /*.route("/login/:login_id", get(exec_login))
     .route("/logout", get(logout)*/
 }

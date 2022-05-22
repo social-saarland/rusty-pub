@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
+    extract::Query,
 };
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -74,4 +75,32 @@ impl<T: Serialize> IntoResponse for Jrd<T> {
         )
             .into_response()
     }
+}
+
+pub async fn finger(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {
+    //  Quick hack to extract the name from the query string.
+    let query = params.get("resource").unwrap();
+    println!("query: {}", query);
+    let x = query.split(":").collect::<Vec<&str>>();
+    let y = x[1].split("@").collect::<Vec<&str>>();
+    let name = y[0];
+
+    //  Calculate the url of a users profile. Currently all users exist. Should
+    //  use axum functionality to build the url and the domain must be read from
+    //  an environment variable of course.
+    let profile = format!("https://achim.eu.ngrok.io/user/{}", name).to_string();
+    println!("profile: {}", profile);
+
+    //  This is just a playground, so we know all users and return the links
+    //  to their profile as expected by Webfinger.
+    Jrd(Finger {
+        subject: Some(params.get("resource").unwrap().to_string()),
+        links: vec![Link {
+            rel: Some("self".to_string()),
+            type_: Some("application/activity+json".to_string()),
+            href: Some(profile),
+            ..Default::default()
+        }],
+        ..Default::default()
+    })
 }
