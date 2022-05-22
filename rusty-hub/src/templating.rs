@@ -1,15 +1,12 @@
-
+use axum::async_trait;
 use axum::{
-    extract::{Extension, FromRequest, Json, Query, RequestParts, rejection::ExtensionRejection},
+    extract::{Extension, FromRequest, RequestParts},
     http::{header, StatusCode},
     response::{IntoResponse, Response},
-    routing::{get, post},
-    Router,
 };
 use std::sync::Arc;
-use tera::{Context, Tera};
 use tera;
-use axum::async_trait;
+use tera::{Context, Tera};
 
 pub struct Render {
     tera: Arc<Tera>,
@@ -29,7 +26,7 @@ where
     async fn from_request(req: &mut RequestParts<B>) -> Result<Self, Self::Rejection> {
         match Extension::<Templates>::from_request(req).await {
             Ok(Extension(t)) => Ok(t),
-            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR)
+            Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
         }
     }
 }
@@ -53,8 +50,10 @@ impl Templates {
 impl IntoResponse for Render {
     fn into_response(self) -> Response {
         match self.tera.render(&self.name, &Context::new()) {
-            Ok(html) => (StatusCode::OK, [(header::CONTENT_TYPE, "text/html")], html).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e)).into_response()
+            Ok(html) => {
+                (StatusCode::OK, [(header::CONTENT_TYPE, "text/html")], html).into_response()
+            }
+            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("{}", e)).into_response(),
         }
     }
 }

@@ -1,12 +1,16 @@
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
+    routing::{get, post},
+    Json, Router,
 };
 use reqwest;
 use reqwest::header::{HeaderMap, ACCEPT};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+
+use crate::User;
 
 //  This file contains data structures to serialize and deserialize
 //  ActivityPub data into / from Json using the serde library.
@@ -106,4 +110,49 @@ pub struct PublicKey {
     pub owner: String,
     #[serde(rename = "publicKeyPem")]
     pub public_key_pem: String,
+}
+
+//  axum web handlers
+//
+//  Returns the ActivityPub profile of a user.
+async fn profile_handler(user: User) -> Activity<Profile> {
+    println!("GET: profile of user '{}'.", user.name);
+    Activity(user.profile())
+}
+
+//  Handles messages posted to a users inbox. Currently only "Follow"
+//  actions can be deserialized. They are dumped to the console for
+//  demo purposes. Nothing else is happening yet.
+async fn inbox_post_handler(user: User, Json(payload): Json<Action>) -> impl IntoResponse {
+    println!("POST: inbox of user '{}'.", user.name);
+    println!("Body: {:?}", payload);
+    (StatusCode::OK, "inbox").into_response()
+}
+
+//  Other handlers are just placeholders.
+//
+async fn inbox_get_handler(user: User) -> impl IntoResponse {
+    println!("GET: inbox of user '{}'.", user.name);
+    (StatusCode::OK, "inbox").into_response()
+}
+
+async fn outbox_post_handler(user: User) -> impl IntoResponse {
+    println!("POST: outbox of user '{}'.", user.name);
+    (StatusCode::OK, "outbox").into_response()
+}
+
+async fn outbox_get_handler(user: User) -> impl IntoResponse {
+    println!("GET: outbox of user '{}'.", user.name);
+    (StatusCode::OK, "outbox").into_response()
+}
+
+pub fn router() -> Router {
+    Router::new()
+        .route("/user/:user", get(profile_handler))
+        //  Inbox and outbox as expected by ActivityPub. Currently only the
+        //  POST inbox is a bit more than just a placeholder.
+        .route("/user/:user/inbox", post(inbox_post_handler))
+        .route("/user/:user/inbox", get(inbox_get_handler))
+        .route("/user/:user/outbox", post(outbox_post_handler))
+        .route("/user/:user/outbox", get(outbox_get_handler))
 }

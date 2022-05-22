@@ -3,10 +3,9 @@ use tokio;
 use std::{collections::HashMap, error::Error};
 
 use axum::{
-    extract::{Extension, FromRequest, Json, Query, RequestParts, rejection::ExtensionRejection},
-    http::{header, StatusCode},
-    response::{IntoResponse, Response},
-    routing::{get, post},
+    extract::{Extension, Query},
+    response::IntoResponse,
+    routing::get,
     Router,
 };
 
@@ -22,12 +21,9 @@ mod auth;
 mod db;
 mod templating;
 
-use activitypub::{Action, Activity, Profile};
+use templating::Templates;
 use user::User;
 use webfinger::{Finger, Jrd, Link};
-use templating::Templates;
-
-
 
 async fn index(tmpl: Templates) -> impl IntoResponse {
     tmpl.render("index.html")
@@ -38,15 +34,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
-    /*
-     * Minimal axum based webserver, providing a Webfinger
-     * endpoint and minimal ActivityPub support: User profiles,
-     * inboxes and outboxes.
-     */
-
     let templates = match Templates::new("templates/**/*.html") {
         Ok(t) => t,
-        Err(e) => panic!("Failed to load templates: {}", e)
+        Err(e) => panic!("Failed to load templates: {}", e),
     };
 
     let app = Router::new()
@@ -57,13 +47,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .route("/.well-known/webfinger", get(finger))
         //  The profile of a user. It could be any url as it is referenced
         //  from the webfinger handler.
-        .route("/user/:user", get(profile_handler))
-        //  Inbox and outbox as expected by ActivityPub. Currently only the
-        //  POST inbox is a bit more than just a placeholder.
-        .route("/user/:user/inbox", post(inbox_post_handler))
-        .route("/user/:user/inbox", get(inbox_get_handler))
-        .route("/user/:user/outbox", post(outbox_post_handler))
-        .route("/user/:user/outbox", get(outbox_get_handler))
+        .merge(activitypub::router())
         .nest("/auth", auth::routes())
         .layer(TraceLayer::new_for_http())
         .layer(Extension(db::prepare_from_env().await?))
@@ -103,36 +87,4 @@ async fn finger(Query(params): Query<HashMap<String, String>>) -> impl IntoRespo
         }],
         ..Default::default()
     })
-}
-
-//  Returns the ActivityPub profile of a user.
-async fn profile_handler(user: User) -> Activity<Profile> {
-    println!("GET: profile of user '{}'.", user.name);
-    Activity(user.profile())
-}
-
-//  Handles messages posted to a users inbox. Currently only "Follow"
-//  actions can be deserialized. They are dumped to the console for
-//  demo purposes. Nothing else is happening yet.
-async fn inbox_post_handler(user: User, Json(payload): Json<Action>) -> impl IntoResponse {
-    println!("POST: inbox of user '{}'.", user.name);
-    println!("Body: {:?}", payload);
-    (StatusCode::OK, "inbox").into_response()
-}
-
-//  Other handlers are just placeholders.
-//
-async fn inbox_get_handler(user: User) -> impl IntoResponse {
-    println!("GET: inbox of user '{}'.", user.name);
-    (StatusCode::OK, "inbox").into_response()
-}
-
-async fn outbox_post_handler(user: User) -> impl IntoResponse {
-    println!("POST: outbox of user '{}'.", user.name);
-    (StatusCode::OK, "outbox").into_response()
-}
-
-async fn outbox_get_handler(user: User) -> impl IntoResponse {
-    println!("GET: outbox of user '{}'.", user.name);
-    (StatusCode::OK, "outbox").into_response()
 }
