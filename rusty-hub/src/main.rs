@@ -1,11 +1,11 @@
 use tokio;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, error::Error};
 
 use axum::{
-    extract::{Json, Query},
-    http::StatusCode,
-    response::IntoResponse,
+    extract::{Extension, FromRequest, Json, Query, RequestParts, rejection::ExtensionRejection},
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
     routing::{get, post},
     Router,
 };
@@ -18,12 +18,23 @@ pub mod activitypub;
 pub mod user;
 pub mod webfinger;
 
+mod auth;
+mod db;
+mod templating;
+
 use activitypub::{Action, Activity, Profile};
 use user::User;
 use webfinger::{Finger, Jrd, Link};
+use templating::Templates;
+
+
+
+async fn index(tmpl: Templates) -> impl IntoResponse {
+    tmpl.render("index.html")
+}
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn Error>> {
     dotenv().ok();
     tracing_subscriber::fmt::init();
 
@@ -33,9 +44,14 @@ async fn main() {
      * inboxes and outboxes.
      */
 
+    let templates = match Templates::new("templates/**/*.html") {
+        Ok(t) => t,
+        Err(e) => panic!("Failed to load templates: {}", e)
+    };
+
     let app = Router::new()
         //  just some fake root to check if the app is running
-        .route("/", get(|| async { "Hello, World!" }))
+        .route("/", get(index))
         //  Tthis handler is called by Mastodon if you search for a user.
         //  See the Webfinger specs (https://webfinger.net/) for details.
         .route("/.well-known/webfinger", get(finger))
@@ -48,12 +64,17 @@ async fn main() {
         .route("/user/:user/inbox", get(inbox_get_handler))
         .route("/user/:user/outbox", post(outbox_post_handler))
         .route("/user/:user/outbox", get(outbox_get_handler))
-        .layer(TraceLayer::new_for_http());
+        .nest("/auth", auth::routes())
+        .layer(TraceLayer::new_for_http())
+        .layer(Extension(db::prepare_from_env().await?))
+        .layer(Extension(templates));
 
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
         .serve(app.into_make_service())
         .await
         .unwrap();
+
+    Ok(())
 }
 
 async fn finger(Query(params): Query<HashMap<String, String>>) -> impl IntoResponse {

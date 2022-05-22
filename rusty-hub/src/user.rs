@@ -10,7 +10,6 @@ use rsa;
 use rsa::pkcs8::LineEnding;
 use rsa::pkcs8::{DecodePublicKey, EncodePrivateKey, EncodePublicKey};
 
-
 //  Fake implementation of a user. This demo knows all user names and
 //  the implementation is just an object holding the name.
 pub struct User {

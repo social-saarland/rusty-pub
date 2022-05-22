@@ -11,7 +11,6 @@ use std::collections::HashMap;
 //  This file contains data structures to serialize and deserialize
 //  ActivityPub data into / from Json using the serde library.
 
-
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum Action {

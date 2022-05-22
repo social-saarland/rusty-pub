@@ -1,0 +1,21 @@
+<html>
+  <body>
+  test template
+    <ul>
+    {% for x in test %}
+      <li>xxx</li>
+    {% endfor %}
+    </ul>
+		<h2>mail</h2>
+    {% for x in mails %}
+		<li>{{x.id}}
+			<ul>
+			{% for e in x.emails %}
+			<li>{{e}}</li>
+			{% endfor %}
+			</ul>
+		</li>
+    {% endfor %}
+
+  </body>
+</html>
